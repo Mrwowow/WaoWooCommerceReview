@@ -17,7 +17,9 @@ class WAO_WCR_Review {
     private function __construct() {
         add_filter('comment_text', array($this, 'display_review_media'), 10, 2);
         add_action('comment_post', array($this, 'process_review_media_upload'), 10, 2);
-        add_filter('woocommerce_product_review_comment_form_args', array($this, 'add_media_upload_field'));
+        add_filter('woocommerce_product_review_comment_form_args', array($this, 'add_media_upload_field'), 99);
+        add_action('comment_form_logged_in_after', array($this, 'add_media_upload_field_direct'));
+        add_action('comment_form_after_fields', array($this, 'add_media_upload_field_direct'));
         add_action('wp_ajax_wao_wcr_vote_helpful', array($this, 'ajax_vote_helpful'));
         add_action('wp_ajax_nopriv_wao_wcr_vote_helpful', array($this, 'ajax_vote_helpful'));
     }
@@ -51,6 +53,39 @@ class WAO_WCR_Review {
         $comment_form['comment_field'] .= $upload_field;
 
         return $comment_form;
+    }
+
+    public function add_media_upload_field_direct() {
+        // Direct output method for themes that don't use the filter properly
+        if (!is_product()) {
+            return;
+        }
+
+        $enable_photo = get_option('wao_wcr_enable_photo_reviews') === 'yes';
+        $enable_video = get_option('wao_wcr_enable_video_reviews') === 'yes';
+
+        if (!$enable_photo && !$enable_video) {
+            return;
+        }
+
+        $max_uploads = absint(get_option('wao_wcr_max_uploads_per_review', 5));
+
+        $accepted_types = array();
+        if ($enable_photo) {
+            $accepted_types[] = 'image/*';
+        }
+        if ($enable_video) {
+            $accepted_types[] = 'video/*';
+        }
+
+        $accept_attr = implode(',', $accepted_types);
+        ?>
+        <p class="wao-wcr-media-upload comment-form-media">
+            <label for="wao-wcr-media-files"><?php _e('Upload Photos/Videos (Optional)', 'wao-woocommerce-review'); ?></label>
+            <input type="file" id="wao-wcr-media-files" name="wao_wcr_media[]" accept="<?php echo esc_attr($accept_attr); ?>" multiple style="display:block; width:100%; padding:10px; border:2px dashed #ccc; border-radius:4px; background:#f9f9f9;">
+            <small style="display:block; margin-top:5px; color:#666;"><?php printf(__('You can upload up to %d files', 'wao-woocommerce-review'), $max_uploads); ?></small>
+        </p>
+        <?php
     }
 
     public function process_review_media_upload($comment_id, $comment_approved) {

@@ -4,7 +4,7 @@
  * Plugin URI: https://github.com/Mrwowow/WaoWooCommerceReview
  * Description: Turn customer feedback into repeat sales. Reward customers with automatic discount coupons for leaving reviews, collect photo/video reviews, and automate review reminder emails.
  * Version: 1.0.0
- * Author: Your Name
+ * Author: Morgan Victor
  * Author URI: https://github.com/Mrwowow
  * Text Domain: wao-woocommerce-review
  * Domain Path: /languages

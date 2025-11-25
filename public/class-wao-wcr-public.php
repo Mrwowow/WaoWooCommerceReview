@@ -16,7 +16,8 @@ class WAO_WCR_Public {
 
     private function __construct() {
         add_action('wp_enqueue_scripts', array($this, 'enqueue_public_assets'));
-        add_filter('woocommerce_product_tabs', array($this, 'customize_review_tab'), 98);
+        // Don't override the reviews tab - let WooCommerce handle it naturally
+        // add_filter('woocommerce_product_tabs', array($this, 'customize_review_tab'), 98);
         add_action('woocommerce_review_before_comment_meta', array($this, 'display_review_rating_summary'));
     }
 

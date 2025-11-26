@@ -6,6 +6,7 @@ if (!defined('ABSPATH')) {
 class WAO_WCR_Review {
 
     private static $instance = null;
+    private static $upload_field_rendered = false;
 
     public static function get_instance() {
         if (null === self::$instance) {
@@ -25,12 +26,19 @@ class WAO_WCR_Review {
     }
 
     public function add_media_upload_field($comment_form) {
+        // Prevent duplicate rendering
+        if (self::$upload_field_rendered) {
+            return $comment_form;
+        }
+
         $enable_photo = get_option('wao_wcr_enable_photo_reviews') === 'yes';
         $enable_video = get_option('wao_wcr_enable_video_reviews') === 'yes';
 
         if (!$enable_photo && !$enable_video) {
             return $comment_form;
         }
+
+        self::$upload_field_rendered = true;
 
         $max_uploads = absint(get_option('wao_wcr_max_uploads_per_review', 5));
 
@@ -56,6 +64,11 @@ class WAO_WCR_Review {
     }
 
     public function add_media_upload_field_direct() {
+        // Prevent duplicate rendering
+        if (self::$upload_field_rendered) {
+            return;
+        }
+
         // Direct output method for themes that don't use the filter properly
         if (!is_product()) {
             return;
@@ -67,6 +80,8 @@ class WAO_WCR_Review {
         if (!$enable_photo && !$enable_video) {
             return;
         }
+
+        self::$upload_field_rendered = true;
 
         $max_uploads = absint(get_option('wao_wcr_max_uploads_per_review', 5));
 

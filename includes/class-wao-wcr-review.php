@@ -170,9 +170,23 @@ class WAO_WCR_Review {
                     esc_attr($media->file_name)
                 );
             } elseif ($media->media_type === 'video') {
+                // Detect video MIME type from file extension
+                $file_ext = strtolower(pathinfo($media->file_url, PATHINFO_EXTENSION));
+                $mime_types = array(
+                    'mp4'  => 'video/mp4',
+                    'webm' => 'video/webm',
+                    'ogg'  => 'video/ogg',
+                    'mov'  => 'video/quicktime',
+                    'avi'  => 'video/x-msvideo',
+                    'wmv'  => 'video/x-ms-wmv',
+                    'm4v'  => 'video/x-m4v'
+                );
+                $mime_type = isset($mime_types[$file_ext]) ? $mime_types[$file_ext] : 'video/mp4';
+
                 $media_html .= sprintf(
-                    '<video class="wao-wcr-media-item" controls><source src="%s" type="video/mp4">%s</video>',
+                    '<video class="wao-wcr-media-item wao-wcr-video-review" controls preload="metadata" style="max-width:100%%; height:auto;"><source src="%s" type="%s">%s</video>',
                     esc_url($media->file_url),
+                    esc_attr($mime_type),
                     __('Your browser does not support the video tag.', 'wao-woocommerce-review')
                 );
             }

@@ -144,6 +144,20 @@
     border-radius: 6px;
 }
 
+/* Video Review Specific Styles */
+.wao-wcr-video-review {
+    width: 300px !important;
+    height: auto !important;
+    max-width: 100%;
+    border-radius: 8px;
+    background: #000;
+}
+
+.wao-wcr-video-review:hover {
+    transform: none;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
 /* Helpful Voting */
 .wao-wcr-helpful-voting {
     margin-top: 15px;

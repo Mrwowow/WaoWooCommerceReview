@@ -11,7 +11,8 @@
  * Requires at least: 5.0
  * Requires PHP: 7.0
  * WC requires at least: 5.0
- * WC tested up to: 8.0
+ * WC tested up to: 9.5
+ * Requires Plugins: woocommerce
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  */
@@ -77,6 +78,9 @@ class WaoWooCommerceReview {
         // Load text domain
         load_plugin_textdomain('wao-woocommerce-review', false, dirname(plugin_basename(__FILE__)) . '/languages');
 
+        // Declare WooCommerce HPOS compatibility
+        add_action('before_woocommerce_init', array($this, 'declare_woocommerce_compatibility'));
+
         // Initialize classes
         WAO_WCR_Database::get_instance();
         WAO_WCR_Campaign::get_instance();
@@ -90,6 +94,13 @@ class WaoWooCommerceReview {
             WAO_WCR_Admin::get_instance();
         } else {
             WAO_WCR_Public::get_instance();
+        }
+    }
+
+    public function declare_woocommerce_compatibility() {
+        if (class_exists('\Automattic\WooCommerce\Utilities\FeaturesUtil')) {
+            \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('custom_order_tables', __FILE__, true);
+            \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('cart_checkout_blocks', __FILE__, true);
         }
     }
 

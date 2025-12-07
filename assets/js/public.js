@@ -1,6 +1,13 @@
 jQuery(document).ready(function($) {
     'use strict';
 
+    // CRITICAL: Ensure review form has enctype for file uploads
+    var reviewForm = $('#commentform, #review_form_wrapper form, .comment-form');
+    if (reviewForm.length && $('#wao-wcr-media-files').length) {
+        reviewForm.attr('enctype', 'multipart/form-data');
+        reviewForm.attr('method', 'post');
+    }
+
     // Helpful Vote Handler
     $('.wao-wcr-vote-helpful').on('click', function(e) {
         e.preventDefault();

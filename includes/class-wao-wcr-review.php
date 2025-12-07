@@ -40,6 +40,13 @@ class WAO_WCR_Review {
 
         self::$upload_field_rendered = true;
 
+        // CRITICAL: Set enctype for file uploads
+        $comment_form['format'] = 'html5';
+        if (!isset($comment_form['form_attributes'])) {
+            $comment_form['form_attributes'] = array();
+        }
+        $comment_form['form_attributes']['enctype'] = 'multipart/form-data';
+
         $max_uploads = absint(get_option('wao_wcr_max_uploads_per_review', 5));
 
         $accepted_types = array();
@@ -104,7 +111,8 @@ class WAO_WCR_Review {
     }
 
     public function process_review_media_upload($comment_id, $comment_approved) {
-        if (!isset($_FILES['wao_wcr_media'])) {
+        // Check if files were uploaded
+        if (!isset($_FILES['wao_wcr_media']) || empty($_FILES['wao_wcr_media']['name'][0])) {
             return;
         }
 
@@ -115,10 +123,12 @@ class WAO_WCR_Review {
             require_once(ABSPATH . 'wp-admin/includes/file.php');
         }
 
-        $file_count = count($files['name']);
+        // Handle array of files
+        $file_count = is_array($files['name']) ? count($files['name']) : 1;
 
         for ($i = 0; $i < min($file_count, $max_uploads); $i++) {
-            if ($files['error'][$i] !== UPLOAD_ERR_OK) {
+            // Skip if no file or has errors
+            if (empty($files['name'][$i]) || $files['error'][$i] !== UPLOAD_ERR_OK) {
                 continue;
             }
 
@@ -130,12 +140,27 @@ class WAO_WCR_Review {
                 'size' => $files['size'][$i]
             );
 
-            $upload_overrides = array('test_form' => false);
+            // Allow file upload without test_form check
+            $upload_overrides = array(
+                'test_form' => false,
+                'test_type' => true
+            );
+
             $uploaded = wp_handle_upload($file, $upload_overrides);
 
-            if (!isset($uploaded['error'])) {
-                $media_type = strpos($uploaded['type'], 'image') !== false ? 'image' : 'video';
+            // Check if upload was successful
+            if (!isset($uploaded['error']) && isset($uploaded['url'])) {
+                // Determine media type from MIME type
+                $media_type = 'video'; // default
+                if (isset($uploaded['type'])) {
+                    if (strpos($uploaded['type'], 'image') !== false) {
+                        $media_type = 'image';
+                    } elseif (strpos($uploaded['type'], 'video') !== false) {
+                        $media_type = 'video';
+                    }
+                }
 
+                // Save to database
                 WAO_WCR_Media::get_instance()->save_review_media(
                     $comment_id,
                     $media_type,

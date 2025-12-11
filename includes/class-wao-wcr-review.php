@@ -24,6 +24,12 @@ class WAO_WCR_Review {
         add_action('wp_ajax_wao_wcr_vote_helpful', array($this, 'ajax_vote_helpful'));
         add_action('wp_ajax_nopriv_wao_wcr_vote_helpful', array($this, 'ajax_vote_helpful'));
 
+        // AJAX upload handlers
+        add_action('wp_ajax_wao_wcr_upload_media', array($this, 'ajax_upload_media'));
+        add_action('wp_ajax_nopriv_wao_wcr_upload_media', array($this, 'ajax_upload_media'));
+        add_action('wp_ajax_wao_wcr_attach_media', array($this, 'ajax_attach_media'));
+        add_action('wp_ajax_nopriv_wao_wcr_attach_media', array($this, 'ajax_attach_media'));
+
         // Add allowed mime types for video uploads
         add_filter('upload_mimes', array($this, 'allow_video_uploads'));
     }
@@ -125,7 +131,38 @@ class WAO_WCR_Review {
     }
 
     public function process_review_media_upload($comment_id, $comment_approved) {
-        // Check if files were uploaded
+        // First, check for AJAX-uploaded files (new method using temp IDs)
+        if (isset($_POST['wao_wcr_temp_ids']) && !empty($_POST['wao_wcr_temp_ids'])) {
+            $temp_ids = array_filter(array_map('sanitize_text_field', explode(',', $_POST['wao_wcr_temp_ids'])));
+            $max_uploads = absint(get_option('wao_wcr_max_uploads_per_review', 5));
+            $attached = 0;
+
+            foreach ($temp_ids as $temp_id) {
+                if ($attached >= $max_uploads) {
+                    break;
+                }
+
+                $upload_data = get_transient($temp_id);
+                if ($upload_data && is_array($upload_data)) {
+                    WAO_WCR_Media::get_instance()->save_review_media(
+                        $comment_id,
+                        $upload_data['type'],
+                        $upload_data['url'],
+                        $upload_data['name'],
+                        $upload_data['size']
+                    );
+                    delete_transient($temp_id);
+                    $attached++;
+                }
+            }
+
+            // If we attached files via AJAX, we're done
+            if ($attached > 0) {
+                return;
+            }
+        }
+
+        // Fallback: Check if files were uploaded directly via form (legacy method)
         if (!isset($_FILES['wao_wcr_media']) || empty($_FILES['wao_wcr_media']['name'][0])) {
             return;
         }
@@ -274,6 +311,122 @@ class WAO_WCR_Review {
         wp_send_json_success(array(
             'message' => __('Thank you for your feedback!', 'wao-woocommerce-review'),
             'count' => $helpful_count
+        ));
+    }
+
+    /**
+     * AJAX handler for uploading media files
+     * Files are uploaded first, then attached to comment after submission
+     */
+    public function ajax_upload_media() {
+        // Check nonce
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'wao_wcr_public_nonce')) {
+            wp_send_json_error(array('message' => __('Security check failed', 'wao-woocommerce-review')));
+        }
+
+        if (!isset($_FILES['file'])) {
+            wp_send_json_error(array('message' => __('No file uploaded', 'wao-woocommerce-review')));
+        }
+
+        if (!function_exists('wp_handle_upload')) {
+            require_once(ABSPATH . 'wp-admin/includes/file.php');
+        }
+
+        $file = $_FILES['file'];
+
+        // Check for upload errors
+        if ($file['error'] !== UPLOAD_ERR_OK) {
+            $error_messages = array(
+                UPLOAD_ERR_INI_SIZE => 'File exceeds server limit',
+                UPLOAD_ERR_FORM_SIZE => 'File exceeds form limit',
+                UPLOAD_ERR_PARTIAL => 'File only partially uploaded',
+                UPLOAD_ERR_NO_FILE => 'No file uploaded',
+                UPLOAD_ERR_NO_TMP_DIR => 'Missing temporary folder',
+                UPLOAD_ERR_CANT_WRITE => 'Failed to write file',
+                UPLOAD_ERR_EXTENSION => 'Upload blocked by extension'
+            );
+            $message = isset($error_messages[$file['error']]) ? $error_messages[$file['error']] : 'Unknown upload error';
+            wp_send_json_error(array('message' => $message));
+        }
+
+        // Check file size (50MB max)
+        $max_size = 50 * 1024 * 1024;
+        if ($file['size'] > $max_size) {
+            wp_send_json_error(array('message' => __('File is too large. Maximum size is 50MB.', 'wao-woocommerce-review')));
+        }
+
+        $upload_overrides = array(
+            'test_form' => false,
+            'test_type' => true
+        );
+
+        $uploaded = wp_handle_upload($file, $upload_overrides);
+
+        if (isset($uploaded['error'])) {
+            wp_send_json_error(array('message' => $uploaded['error']));
+        }
+
+        // Determine media type
+        $media_type = 'image';
+        if (isset($uploaded['type']) && strpos($uploaded['type'], 'video') !== false) {
+            $media_type = 'video';
+        }
+
+        // Generate a temporary ID to track this upload
+        $temp_id = 'wao_' . uniqid();
+
+        // Store in transient for later attachment to comment
+        $upload_data = array(
+            'url' => $uploaded['url'],
+            'file' => $uploaded['file'],
+            'type' => $media_type,
+            'name' => basename($uploaded['file']),
+            'size' => $file['size']
+        );
+        set_transient($temp_id, $upload_data, HOUR_IN_SECONDS);
+
+        wp_send_json_success(array(
+            'temp_id' => $temp_id,
+            'url' => $uploaded['url'],
+            'type' => $media_type,
+            'name' => basename($uploaded['file'])
+        ));
+    }
+
+    /**
+     * AJAX handler for attaching uploaded media to a comment
+     */
+    public function ajax_attach_media() {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'wao_wcr_public_nonce')) {
+            wp_send_json_error(array('message' => __('Security check failed', 'wao-woocommerce-review')));
+        }
+
+        $comment_id = isset($_POST['comment_id']) ? absint($_POST['comment_id']) : 0;
+        $temp_ids = isset($_POST['temp_ids']) ? (array) $_POST['temp_ids'] : array();
+
+        if (!$comment_id || empty($temp_ids)) {
+            wp_send_json_error(array('message' => __('Invalid request', 'wao-woocommerce-review')));
+        }
+
+        $attached = 0;
+        foreach ($temp_ids as $temp_id) {
+            $upload_data = get_transient($temp_id);
+            if ($upload_data) {
+                WAO_WCR_Media::get_instance()->save_review_media(
+                    $comment_id,
+                    $upload_data['type'],
+                    $upload_data['url'],
+                    $upload_data['name'],
+                    $upload_data['size']
+                );
+                delete_transient($temp_id);
+                $attached++;
+            }
+        }
+
+        wp_send_json_success(array(
+            'message' => sprintf(__('%d files attached', 'wao-woocommerce-review'), $attached),
+            'attached' => $attached
         ));
     }
 }

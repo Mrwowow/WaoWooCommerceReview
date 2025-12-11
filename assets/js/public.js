@@ -8,6 +8,37 @@ jQuery(document).ready(function($) {
         reviewForm.attr('method', 'post');
     }
 
+    // File size validation - prevent uploads that are too large
+    var maxFileSize = 50 * 1024 * 1024; // 50MB max per file
+    var maxTotalSize = 100 * 1024 * 1024; // 100MB total max
+
+    $('#wao-wcr-media-files').on('change', function() {
+        var files = this.files;
+        var totalSize = 0;
+        var hasError = false;
+
+        for (var i = 0; i < files.length; i++) {
+            totalSize += files[i].size;
+
+            // Check individual file size
+            if (files[i].size > maxFileSize) {
+                alert('File "' + files[i].name + '" is too large. Maximum file size is 50MB.');
+                hasError = true;
+                break;
+            }
+        }
+
+        // Check total size
+        if (!hasError && totalSize > maxTotalSize) {
+            alert('Total file size exceeds 100MB. Please select fewer or smaller files.');
+            hasError = true;
+        }
+
+        if (hasError) {
+            $(this).val(''); // Clear the file input
+        }
+    });
+
     // Helpful Vote Handler
     $('.wao-wcr-vote-helpful').on('click', function(e) {
         e.preventDefault();

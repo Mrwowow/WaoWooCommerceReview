@@ -23,6 +23,20 @@ class WAO_WCR_Review {
         add_action('comment_form_after_fields', array($this, 'add_media_upload_field_direct'));
         add_action('wp_ajax_wao_wcr_vote_helpful', array($this, 'ajax_vote_helpful'));
         add_action('wp_ajax_nopriv_wao_wcr_vote_helpful', array($this, 'ajax_vote_helpful'));
+
+        // Add allowed mime types for video uploads
+        add_filter('upload_mimes', array($this, 'allow_video_uploads'));
+    }
+
+    public function allow_video_uploads($mimes) {
+        $mimes['mp4'] = 'video/mp4';
+        $mimes['mov'] = 'video/quicktime';
+        $mimes['avi'] = 'video/x-msvideo';
+        $mimes['wmv'] = 'video/x-ms-wmv';
+        $mimes['webm'] = 'video/webm';
+        $mimes['ogv'] = 'video/ogg';
+        $mimes['m4v'] = 'video/x-m4v';
+        return $mimes;
     }
 
     public function add_media_upload_field($comment_form) {

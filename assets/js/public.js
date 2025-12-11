@@ -52,6 +52,13 @@ jQuery(document).ready(function($) {
             $container.append($preview);
         }
 
+        // Create or get progress container
+        var $progressContainer = $container.find('.wao-wcr-progress-container');
+        if (!$progressContainer.length) {
+            $progressContainer = $('<div class="wao-wcr-progress-container"></div>');
+            $container.append($progressContainer);
+        }
+
         // Show uploading status
         var $status = $container.find('.wao-wcr-upload-status');
         if (!$status.length) {
@@ -64,11 +71,25 @@ jQuery(document).ready(function($) {
         var totalFiles = files.length;
 
         for (var i = 0; i < files.length; i++) {
-            (function(file) {
+            (function(file, fileIndex) {
                 var formData = new FormData();
                 formData.append('action', 'wao_wcr_upload_media');
                 formData.append('nonce', waoWcrPublic.nonce);
                 formData.append('file', file);
+
+                // Create individual progress bar for this file
+                var progressId = 'progress-' + fileIndex + '-' + Date.now();
+                var $fileProgress = $('<div class="wao-wcr-file-progress" id="' + progressId + '">' +
+                    '<div class="wao-wcr-file-progress-info">' +
+                    '<span class="file-name">' + truncateFileName(file.name, 25) + '</span>' +
+                    '<span class="file-size">(' + formatFileSize(file.size) + ')</span>' +
+                    '<span class="progress-percent">0%</span>' +
+                    '</div>' +
+                    '<div class="wao-wcr-progress-bar-wrapper">' +
+                    '<div class="wao-wcr-progress-bar-inner" style="width: 0%"></div>' +
+                    '</div>' +
+                    '</div>');
+                $progressContainer.append($fileProgress);
 
                 $status.html('Uploading ' + (uploadCount + 1) + ' of ' + totalFiles + '...');
 
@@ -78,11 +99,31 @@ jQuery(document).ready(function($) {
                     data: formData,
                     processData: false,
                     contentType: false,
+                    xhr: function() {
+                        var xhr = new window.XMLHttpRequest();
+                        xhr.upload.addEventListener('progress', function(e) {
+                            if (e.lengthComputable) {
+                                var percent = Math.round((e.loaded / e.total) * 100);
+                                $('#' + progressId + ' .wao-wcr-progress-bar-inner').css('width', percent + '%');
+                                $('#' + progressId + ' .progress-percent').text(percent + '%');
+
+                                // Update overall status
+                                if (percent === 100) {
+                                    $('#' + progressId + ' .progress-percent').text('Processing...');
+                                }
+                            }
+                        }, false);
+                        return xhr;
+                    },
                     success: function(response) {
                         uploadCount++;
 
                         if (response.success) {
                             uploadedFiles.push(response.data.temp_id);
+
+                            // Mark progress as complete
+                            $('#' + progressId + ' .wao-wcr-progress-bar-inner').css('width', '100%').addClass('complete');
+                            $('#' + progressId + ' .progress-percent').text('Done!').addClass('complete');
 
                             // Add preview
                             var previewHtml = '';
@@ -92,33 +133,75 @@ jQuery(document).ready(function($) {
                                     '<span class="remove-preview">&times;</span>' +
                                     '</div>';
                             } else {
-                                previewHtml = '<div class="wao-wcr-preview-item" data-temp-id="' + response.data.temp_id + '">' +
+                                previewHtml = '<div class="wao-wcr-preview-item video" data-temp-id="' + response.data.temp_id + '">' +
                                     '<video src="' + response.data.url + '"></video>' +
+                                    '<span class="video-icon">&#9658;</span>' +
                                     '<span class="remove-preview">&times;</span>' +
                                     '</div>';
                             }
                             $preview.append(previewHtml);
+
+                            // Remove progress bar after delay
+                            setTimeout(function() {
+                                $('#' + progressId).slideUp(300, function() {
+                                    $(this).remove();
+                                });
+                            }, 1500);
                         } else {
+                            // Mark as error
+                            $('#' + progressId + ' .wao-wcr-progress-bar-inner').addClass('error');
+                            $('#' + progressId + ' .progress-percent').text('Failed').addClass('error');
                             alert('Upload failed: ' + response.data.message);
                         }
 
                         if (uploadCount >= totalFiles) {
                             isUploading = false;
-                            $status.html(uploadedFiles.length + ' file(s) ready');
+                            updateUploadStatus($status);
                         }
                     },
                     error: function() {
                         uploadCount++;
+
+                        // Mark as error
+                        $('#' + progressId + ' .wao-wcr-progress-bar-inner').addClass('error');
+                        $('#' + progressId + ' .progress-percent').text('Failed').addClass('error');
                         alert('Upload failed for ' + file.name);
 
                         if (uploadCount >= totalFiles) {
                             isUploading = false;
-                            $status.html(uploadedFiles.length + ' file(s) ready');
+                            updateUploadStatus($status);
                         }
                     }
                 });
-            })(files[i]);
+            })(files[i], i);
         }
+    }
+
+    // Update upload status text
+    function updateUploadStatus($status) {
+        if (uploadedFiles.length > 0) {
+            $status.html('<span class="status-success">' + uploadedFiles.length + ' file(s) ready to submit</span>');
+        } else {
+            $status.html('');
+        }
+    }
+
+    // Truncate long file names
+    function truncateFileName(name, maxLength) {
+        if (name.length <= maxLength) return name;
+        var ext = name.split('.').pop();
+        var nameWithoutExt = name.substring(0, name.length - ext.length - 1);
+        var truncated = nameWithoutExt.substring(0, maxLength - ext.length - 4) + '...';
+        return truncated + '.' + ext;
+    }
+
+    // Format file size to human readable
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        var k = 1024;
+        var sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        var i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
     }
 
     // Remove preview item
